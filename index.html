@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tic Tac Toe (Python in the Browser)</title>
+
+    <!-- PyScript (pinned release). Avoid /latest to prevent breakage. -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css" />
+    <script type="module" src="https://pyscript.net/releases/2026.3.1/core.js"></script>
+
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <main class="app">
+      <h1>Tic Tac Toe</h1>
+      <p class="subtitle">Made with Python (PyScript) + GitHub</p>
+
+      <section class="controls">
+        <label>
+          Mode:
+          <select id="mode">
+            <option value="pvp" selected>Player vs Player</option>
+            <option value="cpu">Player vs Computer (random)</option>
+          </select>
+        </label>
+
+        <label>
+          You play as:
+          <select id="human_symbol">
+            <option value="X" selected>X</option>
+            <option value="O">O</option>
+          </select>
+        </label>
+
+        <button id="new_game" class="btn">New Game</button>
+      </section>
+
+      <section class="board" id="board" aria-label="Tic Tac Toe board">
+        <!-- 9 buttons -->
+        <button class="cell" id="cell-0" aria-label="cell 1"></button>
+        <button class="cell" id="cell-1" aria-label="cell 2"></button>
+        <button class="cell" id="cell-2" aria-label="cell 3"></button>
+
+        <button class="cell" id="cell-3" aria-label="cell 4"></button>
+        <button class="cell" id="cell-4" aria-label="cell 5"></button>
+        <button class="cell" id="cell-5" aria-label="cell 6"></button>
+
+        <button class="cell" id="cell-6" aria-label="cell 7"></button>
+        <button class="cell" id="cell-7" aria-label="cell 8"></button>
+        <button class="cell" id="cell-8" aria-label="cell 9"></button>
+      </section>
+
+      <p id="status" class="status">Loading…</p>
+
+      <section class="scoreboard">
+        <div class="score"><span>X</span> wins: <strong id="x_wins">0</strong></div>
+        <div class="score"><span>O</span> wins: <strong id="o_wins">0</strong></div>
+        <div class="score">Ties: <strong id="ties">0</strong></div>
+      </section>
+    </main>
+
+    <script type="py">
+from pyscript import document
+from pyodide.ffi import create_proxy
+import random
+
+WIN_LINES = [
+    (0,1,2),(3,4,5),(6,7,8),
+    (0,3,6),(1,4,7),(2,5,8),
+    (0,4,8),(2,4,6)
+]
+
+board = [""] * 9
+turn = "X"
+game_over = False
+
+x_wins = 0
+o_wins = 0
+ties = 0
+
+def el(id_):  # small helper
+    return document.getElementById(id_)
+
+def get_mode():
+    return el("mode").value
+
+def human_symbol():
+    return el("human_symbol").value
+
+def cpu_symbol():
+    return "O" if human_symbol() == "X" else "X"
+
+def set_status(msg):
+    el("status").innerText = msg
+
+def set_score():
+    el("x_wins").innerText = str(x_wins)
+    el("o_wins").innerText = str(o_wins)
+    el("ties").innerText = str(ties)
+
+def render():
+    for i in range(9):
+        el(f"cell-{i}").innerText = board[i]
+    if not game_over:
+        set_status(f"{turn}'s turn")
+
+def winner():
+    for a,b,c in WIN_LINES:
+        if board[a] and board[a] == board[b] == board[c]:
+            return board[a]
+    if all(cell != "" for cell in board):
+        return "TIE"
+    return None
+
+def end_game(result):
+    global game_over, x_wins, o_wins, ties
+    game_over = True
+
+    if result == "X":
+        x_wins += 1
+        set_status("X wins! 🎉")
+    elif result == "O":
+        o_wins += 1
+        set_status("O wins! 🎉")
+    else:
+        ties += 1
+        set_status("Tie game 🤝")
+
+    set_score()
+
+def cpu_move():
+    """Simple computer: chooses a random available cell."""
+    if game_over:
+        return
+    moves = [i for i,v in enumerate(board) if v == ""]
+    if not moves:
+        return
+    i = random.choice(moves)
+    play_at(i)
+
+def play_at(i):
+    global turn
+    if game_over or board[i] != "":
+        return
+
+    board[i] = turn
+    render()
+
+    result = winner()
+    if result:
+        end_game(result)
+        return
+
+    # switch turn
+    turn = "O" if turn == "X" else "X"
+    render()
+
+    # if vs CPU and it's CPU's turn, play
+    if get_mode() == "cpu" and turn == cpu_symbol():
+        cpu_move()
+
+def on_cell_click(i):
+    # In CPU mode, only allow clicks if it's the human's turn
+    if get_mode() == "cpu" and turn != human_symbol():
+        return
+    play_at(i)
+
+def new_game(*args):
+    global board, turn, game_over
+    board = [""] * 9
+    game_over = False
+    turn = "X"
+    render()
+
+    # If CPU mode and CPU is X (because human chose O), CPU starts.
+    if get_mode() == "cpu" and human_symbol() == "O":
+        cpu_move()
+
+# Wire up button listeners
+for i in range(9):
+    btn = el(f"cell-{i}")
+    btn.addEventListener("click", create_proxy(lambda evt, i=i: on_cell_click(i)))
+
+el("new_game").addEventListener("click", create_proxy(new_game))
+el("mode").addEventListener("change", create_proxy(new_game))
+el("human_symbol").addEventListener("change", create_proxy(new_game))
+
+# Initial paint
+set_score()
+new_game()
+    </script>
+  </body>
+</html>
